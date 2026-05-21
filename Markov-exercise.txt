@@ -1,0 +1,178 @@
+---
+title: "Exercise - Predicting Customer Behavior with Markov Chains - 5 points"
+author: "Your Name"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Introduction to Markov Chains
+
+A Markov chain is a mathematical model that describes a sequence of events where the probability of each event depends only on the state of the previous event, not on the entire history. Think of it as having a "short memory" - it only remembers the most recent state.
+
+Example - Imagine you're a retail manager tracking whether customers are "Active," "Inactive," or "Churned" (left permanently). A Markov chain can help predict future customer states based on current patterns.
+
+## The Problem
+
+A subscription box company tracks customer engagement monthly. Customers can be in three states:
+- **Active**: Regularly purchasing
+- **Inactive**: Skipped recent months but haven't cancelled
+- **Churned**: Cancelled subscription
+
+
+
+From historical data, they observed the following transition probabilities:
+
+## Step 1: Setting Up Our Markov Chain
+
+```{r}
+# Load necessary library
+library(expm)  # For matrix operations
+
+# Define the transition matrix
+# Rows represent current state, columns represent next state
+# Order: Active, Inactive, Churned
+transition_matrix <- matrix(c(
+  0.70, 0.25, 0.05,  # From Active to: Active, Inactive, Churned
+  0.40, 0.30, 0.30,  # From Inactive to: Active, Inactive, Churned
+  0.00, 0.00, 1.00   # From Churned to: Active, Inactive, Churned (absorbing state)
+), nrow = 3, byrow = TRUE)
+
+# Label the matrix
+states <- c("Active", "Inactive", "Churned")
+rownames(transition_matrix) <- states
+colnames(transition_matrix) <- states
+
+print("Transition Probability Matrix:")
+print(transition_matrix)
+```
+
+**Interpretation:** 
+- If a customer is Active this month, there's a 70% chance they'll be Active next month, 25% chance they'll become Inactive, and 5% chance they'll churn.
+- Churned is an "absorbing state" - once customers churn, they stay churned (probability = 1.00).
+
+
+
+
+## Step 2: Predicting Future States
+
+#Start with 1,000 customers: 800 Active, 150 Inactive, 50 Churned.
+
+```{r}
+# Initial distribution
+initial_state <- c(Active = 800, Inactive = 150, Churned = 50)
+initial_proportions <- initial_state / sum(initial_state)
+
+print("Initial Customer Distribution:")
+print(initial_state)
+print("\nInitial Proportions:")
+print(round(initial_proportions, 3))
+```
+
+### Predict After 1 Month
+
+```{r}
+# After 1 month: multiply initial state by transition matrix
+month_1 <- initial_proportions %*% transition_matrix
+print("After 1 Month (Proportions):")
+print(round(month_1, 3))
+
+# Convert back to actual numbers
+month_1_counts <- month_1 * 1000
+print("\nAfter 1 Month (Estimated Customers):")
+print(round(month_1_counts))
+```
+
+### Predict After 6 Months
+
+```{r}
+# After 6 months: raise transition matrix to the 6th power
+transition_6_months <- transition_matrix %^% 6
+month_6 <- initial_proportions %*% transition_6_months
+
+print("After 6 Months (Proportions):")
+print(round(month_6, 3))
+
+month_6_counts <- month_6 * 1000
+print("\nAfter 6 Months (Estimated Customers):")
+print(round(month_6_counts))
+```
+
+
+
+
+## Step 3: Finding the Steady State
+
+The **steady state** tells us what happens in the long run. What will the customer distribution look like after many months?
+
+```{r}
+# Calculate steady state (after 100 months)
+steady_state <- initial_proportions %*% (transition_matrix %^% 100)
+
+print("Steady State Distribution:")
+print(round(steady_state, 3))
+
+steady_state_counts <- steady_state * 1000
+print("\nSteady State (Estimated Customers):")
+print(round(steady_state_counts))
+```
+
+
+
+
+## Step 4: Visualization
+
+#how the customer distribution changes over time.
+
+```{r}
+# Simulate over 12 months
+months <- 0:12
+simulation <- matrix(0, nrow = length(months), ncol = 3)
+simulation[1, ] <- initial_proportions
+
+for (i in 2:length(months)) {
+  simulation[i, ] <- simulation[i-1, ] %*% transition_matrix
+}
+
+# Create data frame for plotting
+library(ggplot2)
+library(tidyr)
+
+sim_df <- as.data.frame(simulation)
+colnames(sim_df) <- states
+sim_df$Month <- months
+
+# Reshape for plotting
+sim_long <- pivot_longer(sim_df, cols = -Month, names_to = "State", values_to = "Proportion")
+
+# Plot
+ggplot(sim_long, aes(x = Month, y = Proportion, color = State, group = State)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  labs(title = "Customer State Evolution Over Time",
+       x = "Months",
+       y = "Proportion of Customers",
+       color = "Customer State") +
+  theme_minimal() +
+  scale_color_manual(values = c("Active" = "#2ecc71", 
+                                  "Inactive" = "#f39c12", 
+                                  "Churned" = "#e74c3c"))
+```
+
+
+
+
+
+## Additional Questions to solve - (2 points each)
+
+1. Change the Active→Active probability from 0.70 to 0.80. How does this affect the 6-month forecast?
+
+2. On average, how many months until an Active customer churns? (Hint: Consider the path through Inactive)
+
+3. If we could reactivate 10% of Churned customers monthly (Churned→Active = 0.10), how would the steady state change?
+
+
+
